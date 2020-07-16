@@ -15,6 +15,8 @@ from pytorch_metric_learning import samplers
 # k = 1
 degs = [90, 180, 270]  # rotations of class examples to augment data
 
+optional_transforms = [torchvision.transforms.CenterCrop(size=28)]
+
 
 class OmniglotDataSet(VisionDataset):
     """`Omniglot <https://github.com/brendenlake/omniglot>`_ Dataset.
@@ -44,7 +46,7 @@ class OmniglotDataSet(VisionDataset):
     # NUM_EVAL_EXAMPLES = NUM_TOTAL_EXAMPLES - NUM_TRAIN_EXAMPLES
 
     def __init__(self, root, background=True, transform=None, target_transform=None,
-                 download=False, training=True, train_set_size=1200):
+                 download=False, training=True, train_set_classes=1200):
         super(OmniglotDataSet, self).__init__(join(root, self.folder), transform=transform,
                                               target_transform=target_transform)
         self.background = background
@@ -63,11 +65,11 @@ class OmniglotDataSet(VisionDataset):
         if training:
             self._character_images = [[(image, idx) for image in
                                        list_files(join(self.target_folder, character), '.png')]
-                                      for idx, character in enumerate(self._characters)][:train_set_size]
+                                      for idx, character in enumerate(self._characters)][:train_set_classes]
         else:
             self._character_images = [[(image, idx) for image in
                                        list_files(join(self.target_folder, character), '.png')]
-                                      for idx, character in enumerate(self._characters)][train_set_size:]
+                                      for idx, character in enumerate(self._characters)][train_set_classes:]
         self._flat_character_images = sum(self._character_images, [])
 
     def __len__(self):
@@ -116,7 +118,8 @@ class OmniglotDataSet(VisionDataset):
 
 # 0. Load data for first 1200 classes
 training_data = OmniglotDataSet(
-    root="./data", download=True, training=True, transform=torchvision.transforms.ToTensor()
+    root="./data", download=True, training=True, train_set_classes=1200,
+    transform=torchvision.transforms.Compose(optional_transforms + [torchvision.transforms.ToTensor()])
 )
 
 
@@ -129,7 +132,7 @@ def add_rotated_classes(data, rotations_at_random=False):
     for rot in rotations:
         rotated_data = OmniglotDataSet(
             root="./data", download=True, training=True,
-            transform=torchvision.transforms.Compose([rot] + [torchvision.transforms.ToTensor()])
+            transform=torchvision.transforms.Compose(optional_transforms + [rot] + [torchvision.transforms.ToTensor()])
         )
         # index % 1200 + (4800 / index) * 1200
         augmented = torch.utils.data.ConcatDataset([augmented, rotated_data])
@@ -143,6 +146,7 @@ augmented_dataset = add_rotated_classes(training_data)
 # 2. provide the model with one drawing of each of the N characters as samples S
 # 3. and a batch B of unlabelled examples
 def get_data_loader(dataset, num_classes=1200, N=5, k=1):
+    """ B is generated implicitly by calling this function with k = k + size of B """
     # labels for base dataset
     labels = np.array([np.repeat([i], 20) for i in range(num_classes)]).flatten()
     # labels for augmented dataset (including rotations)

@@ -1,11 +1,42 @@
 import matplotlib.pyplot as plt
 import torch
 
-class SubsetSequentialSampler(torch.utils.data.Sampler):
-    def __init__(self, indices):
-        self.indices = indices
-        self.start = 0
+
+# class SubsetSequentialSampler(torch.utils.data.Sampler):
+#     def __init__(self, indices):
+#         self.indices = indices
+#         self.start = 0
+#     def __iter__(self):
+#         return (self.indices[i] for i in range(len(self.indices)))
+#     def __len__(self):
+#         return len(self.indices)
+
+def get_default_device():
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+
+
+def to_device(data, device):
+    """Move tensor(s) to chosen device"""
+    if isinstance(data, (list,tuple)):
+        return [to_device(x, device) for x in data]
+    return data.to(device, non_blocking=True)
+
+
+class DeviceDataLoader():
+    """Wrap a dataloader to move data to a device"""
+
+    def __init__(self, dl, device):
+        self.dl = dl
+        self.device = device
+
     def __iter__(self):
-        return (self.indices[i] for i in range(len(self.indices)))
+        """Yield a batch of data after moving it to device"""
+        for b in self.dl:
+            yield to_device(b, self.device)
+
     def __len__(self):
-        return len(self.indices)
+        """Number of batches"""
+        return len(self.dl)
